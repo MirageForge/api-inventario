@@ -139,3 +139,61 @@ def test_product_lifecycle_and_stock_movements(client, admin_headers, operator_h
     assert dash_data["total_inventory_valuation_cost"] == 3 * 50.0
     assert dash_data["total_inventory_valuation_retail"] == 3 * 85.0
     assert len(dash_data["recent_movements"]) >= 3
+
+
+def test_adjustment_to_zero_stock(client, admin_headers, operator_headers):
+    """Verifica que un ajuste de inventario pueda reducir el stock a 0 unidades."""
+    prod_res = client.post(
+        "/api/v1/products",
+        headers=admin_headers,
+        json={"sku": "ZERO-STK-01", "name": "Item Para Descuento Cero", "cost_price": 10.0, "current_stock": 5}
+    )
+    prod_id = prod_res.json()["id"]
+
+    adj_res = client.post(
+        "/api/v1/movements",
+        headers=operator_headers,
+        json={"product_id": prod_id, "movement_type": "ADJUSTMENT", "quantity": 0, "notes": "Ajuste a cero"}
+    )
+    assert adj_res.status_code == 201
+    assert adj_res.json()["new_stock"] == 0
+
+
+def test_search_special_characters_escaping(client, admin_headers, operator_headers):
+    """Verifica que caracteres como % y _ se manejen de forma segura en búsquedas."""
+    client.post(
+        "/api/v1/products",
+        headers=admin_headers,
+        json={"sku": "PROD_100%", "name": "Producto con % y _ en nombre", "cost_price": 5.0}
+    )
+    res = client.get("/api/v1/products?search=100%", headers=operator_headers)
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) == 1
+    assert items[0]["sku"] == "PROD_100%"
+
+
+def test_product_soft_and_hard_delete_behavior(client, admin_headers):
+    """Verifica el borrado suave y la protección de borrado físico ante movimientos."""
+    prod_res = client.post(
+        "/api/v1/products",
+        headers=admin_headers,
+        json={"sku": "DEL-TEST-01", "name": "Producto para Borrado", "current_stock": 5}
+    )
+    prod_id = prod_res.json()["id"]
+
+    # Borrado suave
+    soft_res = client.delete(f"/api/v1/products/{prod_id}", headers=admin_headers)
+    assert soft_res.status_code == 204
+
+    # Verificar que quedó inactivo
+    list_active = client.get("/api/v1/products?is_active=true", headers=admin_headers).json()
+    assert not any(p["id"] == prod_id for p in list_active)
+
+    list_inactive = client.get("/api/v1/products?is_active=false", headers=admin_headers).json()
+    assert any(p["id"] == prod_id for p in list_inactive)
+
+    # Intento de borrado físico (debe fallar con 400 por clave foránea en movimiento inicial)
+    hard_res = client.delete(f"/api/v1/products/{prod_id}?hard_delete=true", headers=admin_headers)
+    assert hard_res.status_code == 400
+    assert "no es posible eliminar" in hard_res.json()["detail"].lower()

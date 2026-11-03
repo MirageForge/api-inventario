@@ -30,21 +30,33 @@ def get_dashboard_summary(
     total_categories = db.query(Category).count()
     total_suppliers = db.query(Supplier).count()
 
-    # Productos activos
-    active_products = db.query(Product).filter(Product.is_active.is_(True)).all()
-    
-    low_stock_list = []
-    total_units = 0
-    total_cost_valuation = 0.0
-    total_retail_valuation = 0.0
+    # Métricas agregadas calculadas directamente en base de datos (previene fugas de memoria y OOM)
+    aggregations = (
+        db.query(
+            func.coalesce(func.sum(Product.current_stock), 0).label("total_units"),
+            func.coalesce(func.sum(Product.current_stock * Product.cost_price), 0.0).label("total_cost"),
+            func.coalesce(func.sum(Product.current_stock * Product.unit_price), 0.0).label("total_retail"),
+        )
+        .filter(Product.is_active.is_(True))
+        .first()
+    )
 
-    for p in active_products:
-        setattr(p, "is_low_stock", p.current_stock <= p.min_stock_alert)
-        total_units += p.current_stock
-        total_cost_valuation += (p.current_stock * (p.cost_price or 0.0))
-        total_retail_valuation += (p.current_stock * (p.unit_price or 0.0))
-        if p.is_low_stock:
-            low_stock_list.append(p)
+    total_units = int(aggregations.total_units) if aggregations else 0
+    total_cost_valuation = float(aggregations.total_cost) if aggregations else 0.0
+    total_retail_valuation = float(aggregations.total_retail) if aggregations else 0.0
+
+    # Consulta optimizada de productos con alerta de stock crítico
+    low_stock_query = (
+        db.query(Product)
+        .filter(
+            Product.is_active.is_(True),
+            Product.current_stock <= Product.min_stock_alert
+        )
+    )
+    low_stock_count = low_stock_query.count()
+    low_stock_products = low_stock_query.order_by(Product.current_stock.asc()).limit(20).all()
+    for p in low_stock_products:
+        setattr(p, "is_low_stock", True)
 
     # Últimos 10 movimientos
     recent_movements = (
@@ -62,10 +74,10 @@ def get_dashboard_summary(
         total_products=total_products,
         total_categories=total_categories,
         total_suppliers=total_suppliers,
-        low_stock_products_count=len(low_stock_list),
+        low_stock_products_count=low_stock_count,
         total_units_in_stock=total_units,
         total_inventory_valuation_cost=round(total_cost_valuation, 2),
         total_inventory_valuation_retail=round(total_retail_valuation, 2),
-        low_stock_products=low_stock_list[:20],
+        low_stock_products=low_stock_products,
         recent_movements=recent_movements
     )

@@ -24,8 +24,13 @@ def create_movement(
     - **OUT (Salida)**: Valida que haya existencias suficientes y descuenta `quantity` unidades.
     - **ADJUSTMENT (Ajuste)**: Establece el stock directamente al valor de `quantity` (útil tras recuentos físicos).
     """
-    # Bloquear el registro del producto para consistencia transaccional
-    product = db.query(Product).filter(Product.id == movement_in.product_id).first()
+    # Bloquear el registro del producto para consistencia transaccional (pesimistic locking)
+    product = (
+        db.query(Product)
+        .filter(Product.id == movement_in.product_id)
+        .with_for_update()
+        .first()
+    )
     if not product:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

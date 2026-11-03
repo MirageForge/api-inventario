@@ -68,9 +68,9 @@ def register(
             detail="El correo electrónico ya está registrado."
         )
 
-    # Si es el primer usuario registrado, otorgar admin automáticamente
+    # Si es el primer usuario registrado, otorgar admin automáticamente; de lo contrario, siempre es OPERATOR
     is_first_user = db.query(User).count() == 0
-    assigned_role = UserRole.ADMIN if is_first_user else user_in.role
+    assigned_role = UserRole.ADMIN if is_first_user else UserRole.OPERATOR
 
     new_user = User(
         username=user_in.username,

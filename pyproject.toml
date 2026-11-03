@@ -1,0 +1,38 @@
+[project]
+name = "api-inventario"
+version = "1.0.0"
+description = "API de Gestión de Inventario y Almacén"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "S",   # flake8-bandit (security checks)
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S101",  # assert in tests
+    "S105",  # possible hardcoded password in tests/fixtures
+    "S106",  # possible hardcoded password in tests/fixtures
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]
+"seed_data.py" = ["S106"]
+"app/config.py" = ["S105"]
+

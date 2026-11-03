@@ -8,7 +8,6 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     full_name: Optional[str] = Field(None, max_length=100)
-    role: UserRole = UserRole.OPERATOR
 
 
 class UserCreate(UserBase):
@@ -30,6 +29,7 @@ class UserUpdate(BaseModel):
 
 class UserOut(UserBase):
     id: int
+    role: UserRole
     is_active: bool
     created_at: datetime
 

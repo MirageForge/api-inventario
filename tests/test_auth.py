@@ -34,3 +34,20 @@ def test_unauthenticated_request_fails(client):
 def test_operator_cannot_access_admin_user_list(client, operator_headers):
     response = client.get("/api/v1/auth/users", headers=operator_headers)
     assert response.status_code == 403
+
+
+def test_register_regular_user_cannot_become_admin(client, admin_user):
+    """Verifica que un nuevo registro público NO pueda auto-asignarse rol de admin."""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "nuevo_usuario",
+            "email": "nuevo@test.com",
+            "full_name": "Nuevo Usuario",
+            "password": "Password123!",
+            "role": "admin"  # Intento de escalamiento de privilegios
+        }
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["role"] == "operator"  # Debe ser forzado a OPERATOR

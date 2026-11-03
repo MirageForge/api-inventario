@@ -47,11 +47,17 @@ def list_products(
         query = query.filter(Product.current_stock <= Product.min_stock_alert)
 
     if search:
-        search_filter = f"%{search}%"
+        # Escapar caracteres comodín de SQL (%, _, \) para prevenir consultas costosas o inesperadas
+        escaped_search = (
+            search.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
+        search_filter = f"%{escaped_search}%"
         query = query.filter(
             or_(
-                Product.name.ilike(search_filter),
-                Product.sku.ilike(search_filter)
+                Product.name.ilike(search_filter, escape="\\"),
+                Product.sku.ilike(search_filter, escape="\\")
             )
         )
 
@@ -173,9 +179,17 @@ def delete_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
 
     if hard_delete:
-        db.delete(product)
+        try:
+            db.delete(product)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No es posible eliminar físicamente el producto porque tiene movimientos de inventario asociados. Use desactivación lógica (is_active=False)."
+            )
     else:
         product.is_active = False
+        db.commit()
 
-    db.commit()
     return None
